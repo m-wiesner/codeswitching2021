@@ -4,6 +4,8 @@
 
 lexicon_type="baseline"
 
+. ./utils/parse_options.sh
+
 mkdir -p data/dict
 
 if [[ $lexicon_type = "baseline" ]]; then
