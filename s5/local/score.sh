@@ -107,6 +107,9 @@ if $stats; then
     compute-wer-bootci --mode=present \
       ark:$dir/scoring/test_filt.txt ark:$dir/scoring/penalty_$best_wip/$best_lmwt.txt \
       '>' $dir/scoring/wer_details/wer_bootci || exit 1;
+  
+  oov_rate=$(python local/get_oov_rate.py ${data}/text ${symtab})
+  echo ${oov_rate} | tee $dir/scoring/wer_detail/oov_rate 
 fi
 
 
