@@ -51,7 +51,7 @@ hyp_filtering_cmd="cat"
 
 mkdir -p $dir/scoring
 
-cat $data/text | LC_ALL= python local/combine_line_txt_to_paragraph.py | \
+cat $data/text | local/combine_line_txt_to_paragraph.py | \
   $ref_filtering_cmd > $dir/scoring/test_filt.txt
 
 for wip in $(echo $word_ins_penalty | sed 's/,/ /g'); do
@@ -69,6 +69,25 @@ for wip in $(echo $word_ins_penalty | sed 's/,/ /g'); do
     cat $dir/scoring/penalty_$wip/LMWT.txt \| \
     compute-wer --text --mode=present \
     ark:$dir/scoring/test_filt.txt  ark,p:- ">&" $dir/wer_LMWT_$wip || exit 1;
+  if [ -f ${data}/convs_dup ]; then
+    mkdir -p $dir/scoring_{,no}dup/penalty_$wip/log
+    for lmwt in $(seq $min_lmwt $max_lmwt); do
+      lmwt_file=$dir/scoring/penalty_$wip/${lmwt}.txt
+      awk '(NR==FNR){a[$1]=1; next} ($1 in a){print $0}' ${data}/convs_dup ${lmwt_file} \
+        > $dir/scoring_dup/penalty_$wip/${lmwt}.txt
+      awk '(NR==FNR){a[$1]=1; next} ($1 in a){print $0}' ${data}/convs_nodup ${lmwt_file} \
+        > $dir/scoring_nodup/penalty_$wip/${lmwt}.txt
+    done    
+    
+    $cmd LMWT=$min_lmwt:$max_lmwt $dir/scoring_dup/penalty_$wip/log/score.LMWT.log \
+      cat $dir/scoring_dup/penalty_$wip/LMWT.txt \| \
+      compute-wer --text --mode=present \
+      ark:$dir/scoring/test_filt.txt  ark,p:- ">&" $dir/wer_dup_LMWT_$wip || exit 1;
+    $cmd LMWT=$min_lmwt:$max_lmwt $dir/scoring_dup/penalty_$wip/log/score.LMWT.log \
+      cat $dir/scoring_nodup/penalty_$wip/LMWT.txt \| \
+      compute-wer --text --mode=present \
+      ark:$dir/scoring/test_filt.txt  ark,p:- ">&" $dir/wer_nodup_LMWT_$wip || exit 1;
+  fi
 done
 
 for wip in $(echo $word_ins_penalty | sed 's/,/ /g'); do
@@ -108,8 +127,9 @@ if $stats; then
       ark:$dir/scoring/test_filt.txt ark:$dir/scoring/penalty_$best_wip/$best_lmwt.txt \
       '>' $dir/scoring/wer_details/wer_bootci || exit 1;
   
-  oov_rate=$(python local/get_oov_rate.py ${data}/text ${symtab})
-  echo ${oov_rate} | tee $dir/scoring/wer_detail/oov_rate 
+  oov_rate=$(python local/get_oov_rate.py ${dir}/scoring/test_filt.txt ${symtab})
+  echo "OOV Rate: ${oov_rate}"
+  echo ${oov_rate} > $dir/scoring/wer_detail/oov_rate 
 fi
 
 

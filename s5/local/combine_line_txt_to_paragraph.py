@@ -21,14 +21,18 @@ output = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 paragraph_txt_dict = dict()
 for line in infile:
-  line_vect = line.strip().split(' ')
-  uttid = line_vect[0]
-  sequence_id = int(uttid.split('_')[-1])
-  paragraph_id = "_".join(uttid.split('_')[0:-1])
-  utterance_text = " ".join(line_vect[1:])
-  if paragraph_id not in paragraph_txt_dict.keys():
-      paragraph_txt_dict[paragraph_id] = dict()
-  paragraph_txt_dict[paragraph_id][sequence_id] = utterance_text
+    line_vect = line.strip().split(' ')
+    uttid = line_vect[0]
+    sequence_id = int(uttid.split('_')[-1])
+    recoid = uttid.split('_')[1]
+    #paragraph_id = "_".join(uttid.split('_')[0:-1])
+    utterance_text = " ".join(line_vect[1:])
+    if recoid not in paragraph_txt_dict:
+        paragraph_txt_dict[recoid] = dict()
+    paragraph_txt_dict[recoid][sequence_id] = utterance_text
+    #if paragraph_id not in paragraph_txt_dict.keys():
+    #    paragraph_txt_dict[paragraph_id] = dict()
+    #paragraph_txt_dict[paragraph_id][sequence_id] = utterance_text
 
 
 para_txt_dict = dict()

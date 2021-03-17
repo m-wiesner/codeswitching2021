@@ -7,16 +7,14 @@ import argparse
 import sys
 
 # creates a dictionary that maps Hindi-English words.
-def get_filter_dict(trans_book, delimiter):
+def get_filter_dict(trans_book):
     filter_dict = dict()
 
-    with open(trans_book, 'r') as tb:
+    with open(trans_book, 'r', encoding='utf-8') as tb:
         for line in tb.readlines():
-            word, orig_word = line.rstrip().split(delimiter)
+            word, orig_word = line.rstrip().split(None, 1)
             if word not in filter_dict:
-                filter_dict[word] = "%%%" + word
-            if orig_word not in filter_dict:
-                filter_dict[orig_word] = "%%%" + word  
+                filter_dict[word] = orig_word
 
     return filter_dict
             
@@ -36,9 +34,8 @@ def analysis():
 
 def main():
     # awk -F ',' '{ if (length($2) != 1) { print $0} }' is21_hindi_words-dev_set.csv > is21_hindi_english_devfiltered.csv
-    delimiter = ','
     trans_book = 'local/hindi_english_all'
-    filter_dict = get_filter_dict(trans_book, delimiter)
+    filter_dict = get_filter_dict(trans_book)
     filter(filter_dict)
     analysis()
 

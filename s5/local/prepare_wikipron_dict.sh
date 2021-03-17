@@ -5,14 +5,14 @@
 
 dict_dir=data/dict
 g2p_dir=${dict_dir}/g2p
-#mkdir -p ${g2p_dir}
-#
+
 corpus_lex=https://raw.githubusercontent.com/navana-tech/baseline_recipe_is21s_indic_asr_challenge/master/is21-subtask2-kaldi/hindi_baseline/corpus/lang/lexicon.txt
 wikipron_lex=https://raw.githubusercontent.com/kylebgorman/wikipron/master/data/tsv/hin_phonemic.tsv
 
 wget ${corpus_lex} -O ${dict_dir}/baseline.lex
 wget ${wikipron_lex} -O ${dict_dir}/wikipron.lex
 
+mkdir -p ${g2p_dir}
 phonetisaurus-align --input=${dict_dir}/wikipron.lex --ofile=${g2p_dir}/g2p.corpus
 
 ngram-count -lm ${g2p_dir}/g2p.arpa -maxent -maxent-convert-to-arpa \

@@ -17,4 +17,12 @@ for i in train test; do
   ./utils/fix_data_dir.sh data/${i}
 done
 
+./analysis/identify_seen_utts.pl data/train/text data/test/text |\
+  ./analysis/identify_seen_convs_matthew.pl |\
+  awk '($2<80){print $1}' > data/test/convs_nodup
+./analysis/identify_seen_utts.pl data/train/text data/test/text |\
+  ./analysis/identify_seen_convs_matthew.pl |\
+  awk '($2>=80){print $1}' > data/test/convs_dup
+
+
 exit 0;
