@@ -8,14 +8,13 @@ data=/export/corpora5/MultilingualCodeSwitching2021/codeswitching/104/Hindi-Engl
 stage=0
 stop_stage=8
 lexicon_type="baseline" # baseline wikipron
-language_tag=true
 normalize=true
 
 . ./utils/parse_options.sh
 
 if [ $stage -le 0 ] && [ ${stop_stage} -ge 0 ]; then 
   ./local/prepare_data.sh ${data}
-  ./local/prepare_dict.sh --type ${lexicon_type}
+  ./local/prepare_dict.sh --lexicon-type ${lexicon_type}
   ./utils/prepare_lang.sh --share-silence-phones true \
     data/dict "<unk>" data/dict/tmp.lang data/lang_${lexicon_type}_nosp 
 fi
@@ -86,7 +85,7 @@ if [ $stage -le 8 ] && [ ${stop_stage} -ge 8 ]; then
   datadir=data/train
   dict=data/dict
   lang=data/lang_${lexicon_type}
-  alidir=exp/tri3_ali
+  alidir=exp/tri3
   if $normalize; then
     ./local/normalize_datadir.sh --affix "_norm" \
       data/train data/dict data/dict_norm data/lang_${lexicon_type}_nosp_norm 
@@ -94,19 +93,22 @@ if [ $stage -le 8 ] && [ ${stop_stage} -ge 8 ]; then
     dict=data/dict_norm
     lang=data/lang_${lexicon_type}_norm
     alidir=exp/tri3_ali_norm
+    steps/align_fmllr.sh --cmd "$train_cmd" --nj 40 \
+      ${datadir} data/lang_${lexicon_type}_nosp_norm exp/tri3 ${alidir}
   fi
+
   steps/get_prons.sh --cmd "$train_cmd" \
-    ${datadir} data/lang_${lexicon_type}_nosp_norm exp/tri3
+    ${datadir} data/lang_${lexicon_type}_nosp_norm ${alidir}
   utils/dict_dir_add_pronprobs.sh --max-normalize true \
     ${dict} \
-    exp/tri3/pron_counts_nowb.txt exp/tri3/sil_counts_nowb.txt \
-    exp/tri3/pron_bigram_counts_nowb.txt ${dict}_sp
+    ${alidir}/pron_counts_nowb.txt ${alidir}/sil_counts_nowb.txt \
+    ${alidir}/pron_bigram_counts_nowb.txt ${dict}_sp
 
-  utils/prepare_lang.sh --share-silence-phones true data/dict_sp \
+  utils/prepare_lang.sh --share-silence-phones true ${dict}_sp \
     "<unk>" ${dict}_sp/.lang_tmp ${lang}
 
   ./steps/align_fmllr.sh --nj 40 --cmd "$train_cmd" \
-    ${datadir} ${lang} exp/tri3 ${alidir}
+    ${datadir} ${lang} exp/tri3 exp/tri3_ali
 fi
 
 datadir=data/train
