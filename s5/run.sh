@@ -133,11 +133,11 @@ if [ $stage -le 9 ] && [ ${stop_stage} -ge 9 ]; then
   num_valid_utts=$(($num_utts/10))
   num_train_utts=$(($num_utts - $num_valid_utts)) 
   
-  mkdir -p data/lm
+  mkdir -p ${lmdir}
   shuf ${datadir}/text > ${lmdir}/text.shuf
   
   ./local/train_lm.sh ${dict}_sp/lexicon.txt ${lmdir}/text.shuf ${lmdir}
-  ./utils/format_lm.sh ${lang} data/lm/lm.gz ${dict}_sp/lexicon.txt ${lang}
+  ./utils/format_lm.sh ${lang} ${lmdir}/lm.gz ${dict}_sp/lexicon.txt ${lang}
 
   ./utils/mkgraph.sh ${lang} exp/tri3 exp/tri3/${graph}
 
