@@ -3,7 +3,12 @@ import unicodedata
 import random
 import re
 import subprocess
-import epitran
+try:
+    import epitran
+except ImportError:
+    from pip._internal import main as pip
+    pip(['install', 'epitran'])
+    import epitran
 import os
 import unicodecsv as csv
 

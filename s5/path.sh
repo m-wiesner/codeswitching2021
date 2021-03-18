@@ -9,6 +9,6 @@ export PATH=$PWD/utils/:$KALDI_ROOT/tools/openfst/bin:$KALDI_ROOT/tools/sph2pipe
 #export ROOT=`pwd`/../../..
 #export VENV=${ROOT}/tools/venv_lorelei/bin/activate
 export VENV_ROOT=/export/b09/mwiesner/LFMMI_EBM3/nnet_pytorch/tools
-. ${ROOT}/activate_python.sh
+. ${VENV_ROOT}/activate_python.sh
 
 export LC_ALL=C
