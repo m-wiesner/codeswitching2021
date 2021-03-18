@@ -129,7 +129,10 @@ if $stats; then
   
   oov_rate=$(python local/get_oov_rate.py ${dir}/scoring/test_filt.txt ${symtab})
   echo "OOV Rate: ${oov_rate}"
-  echo ${oov_rate} > $dir/scoring/wer_detail/oov_rate 
+  echo ${oov_rate} > $dir/scoring/wer_details/oov_rate 
+  find $dir -name "wer_[0-9]*" | xargs -I {} grep WER {} | ./utils/best_wer.sh
+  grep WER $dir/wer_dup*| ./utils/best_wer.sh
+  grep WER $dir/wer_nodup* | ./utils/best_wer.sh
 fi
 
 
