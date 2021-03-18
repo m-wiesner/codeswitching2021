@@ -9,6 +9,7 @@ stage=0
 stop_stage=8
 lexicon_type="baseline" # baseline wikipron
 language_tag=true
+normalize=true
 
 . ./utils/parse_options.sh
 
@@ -82,19 +83,47 @@ fi
 
 # Add silence props
 if [ $stage -le 8 ] && [ ${stop_stage} -ge 8 ]; then
+  datadir=data/train
+  dict=data/dict
+  lang=data/lang_${lexicon_type}
+  alidir=exp/tri3_ali
+  if $normalize; then
+    ./local/normalize_datadir.sh --affix "_norm" \
+      data/train data/dict data/dict_norm data/lang_${lexicon_type}_nosp_norm 
+    datadir=data/train_norm
+    dict=data/dict_norm
+    lang=data/lang_${lexicon_type}_norm
+    alidir=exp/tri3_ali_norm
+  fi
   steps/get_prons.sh --cmd "$train_cmd" \
-    data/train data/lang_${lexicon_type}_nosp exp/tri3
+    ${datadir} data/lang_${lexicon_type}_nosp_norm exp/tri3
   utils/dict_dir_add_pronprobs.sh --max-normalize true \
-    data/dict \
+    ${dict} \
     exp/tri3/pron_counts_nowb.txt exp/tri3/sil_counts_nowb.txt \
-    exp/tri3/pron_bigram_counts_nowb.txt data/dict_sp
+    exp/tri3/pron_bigram_counts_nowb.txt ${dict}_sp
 
   utils/prepare_lang.sh --share-silence-phones true data/dict_sp \
-    "<unk>" data/dict_sp/.lang_tmp data/lang_${lexicon_type}
+    "<unk>" ${dict}_sp/.lang_tmp ${lang}
 
   ./steps/align_fmllr.sh --nj 40 --cmd "$train_cmd" \
-    data/train data/lang_${lexicon_type} exp/tri3 exp/tri3_ali
+    ${datadir} ${lang} exp/tri3 ${alidir}
 fi
+
+datadir=data/train
+dict=data/dict
+lang=data/lang_${lexicon_type}
+alidir=exp/tri3_ali
+lmdir=data/lm
+graph=graph
+if $normalize; then
+  datadir=data/train_norm
+  dict=data/dict_norm
+  lang=data/lang_${lexicon_type}_norm
+  alidir=exp/tri3_ali_norm
+  lmdir=data/lm_norm
+  graph=graph_norm
+fi
+
 
 # make LM and decode
 if [ $stage -le 9 ] && [ ${stop_stage} -ge 9 ]; then
@@ -103,14 +132,14 @@ if [ $stage -le 9 ] && [ ${stop_stage} -ge 9 ]; then
   num_train_utts=$(($num_utts - $num_valid_utts)) 
   
   mkdir -p data/lm
-  shuf data/train/text > data/lm/text.shuf
+  shuf ${datadir}/text > ${lmdir}/text.shuf
   
-  ./local/train_lm.sh data/dict_sp/lexicon.txt data/lm/text.shuf data/lm
-  ./utils/format_lm.sh data/lang_${lexicon_type} data/lm/lm.gz data/dict_sp/lexicon.txt data/lang_${lexicon_type}
+  ./local/train_lm.sh ${dict}_sp/lexicon.txt ${lmdir}/text.shuf ${lmdir}
+  ./utils/format_lm.sh ${lang} data/lm/lm.gz ${dict}_sp/lexicon.txt ${lang}
 
-  ./utils/mkgraph.sh data/lang_${lexicon_type} exp/tri3 exp/tri3/graph
+  ./utils/mkgraph.sh ${lang} exp/tri3 exp/tri3/${graph}
 
-  ./steps/decode_fmllr_extra.sh --cmd "$decode_cmd" --nj 30 exp/tri3/graph data/test exp/tri3/decode_test
+  ./steps/decode_fmllr_extra.sh --cmd "$decode_cmd" --nj 30 exp/tri3/${graph} data/test exp/tri3/decode_${graph}_test
 fi
 
 exit
