@@ -5,6 +5,10 @@
 
 import argparse
 import sys
+import io
+
+infile = io.TextIOWrapper(sys.stdin.buffer, encoding='utf-8')
+output = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 # creates a dictionary that maps Hindi-English words.
 def get_filter_dict(trans_book):
@@ -20,14 +24,14 @@ def get_filter_dict(trans_book):
             
 # replace hindi word in the utterance with english word or viseversa
 def filter(filter_dict):
-    for line in sys.stdin:
+    for line in infile:
         output_list = list()
         for word in line.rstrip().split():
             if word in filter_dict:
                 output_list.append(filter_dict[word])
             else:
                 output_list.append(word)
-        print(" ".join(output_list))
+        print(" ".join(output_list), file=output)
         
 def analysis():
     pass
@@ -38,6 +42,7 @@ def main():
     filter_dict = get_filter_dict(trans_book)
     filter(filter_dict)
     analysis()
+
 
 if __name__ == "__main__":
     main()

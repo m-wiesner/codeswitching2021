@@ -9,7 +9,8 @@
 
 stage=0
 subsampling=4
-traindir=data/train
+traindir=data/train_norm
+langdir=data/lang_wikipron_norm
 testdir=data/test
 feat_affix=_fbank_64
 alidir=exp/tri3_ali
@@ -20,16 +21,16 @@ width=10
 depth=28
 l2=0.0001
 xent=0.1
-lr=0.0002
+lr=0.0001
 leaky_hmm=0.1
 decay=1e-05
 weight_decay=1e-07
-warmup=15000
-batches_per_epoch=250
-num_epochs=303
+warmup=20000
+batches_per_epoch=1000
+num_epochs=160
 nj_init=2
-nj_final=6
-perturb="[('time_mask', {'width': 10, 'max_drop_percent': 0.5}), ('freq_mask', {'width': 10, 'holes': 5}), ('gauss', {'std': 0.1})]"
+nj_final=2
+perturb="[('time_mask', {'width': 10, 'max_drop_percent': 0.7}), ('freq_mask', {'width': 10, 'holes': 5}), ('gauss', {'std': 0.2})]"
 chunkwidth=220
 min_chunkwidth=60
 random_cw=True
@@ -48,7 +49,6 @@ set -euo pipefail
 
 tree=${chaindir}/tree
 targets=${traindir}${feat_affix}/pdfid.${subsampling}.tgt
-trainname=`basename ${traindir}`
 
 if [ $stage -le 0 ]; then
   for d in ${traindir} ${testdir}; do
@@ -59,15 +59,17 @@ if [ $stage -le 0 ]; then
     ./utils/fix_data_dir.sh ${d}${feat_affix}
   done
 
-  prepare_unlabeled_tgt.py --subsample ${subsampling} \
-    ${testdir}${feat_affix}/utt2num_frames > ${testdir}/pdfid.${subsampling}.tgt
+  if [ ! -z $testdir ]; then
+    prepare_unlabeled_tgt.py --subsample ${subsampling} \
+      ${testdir}${feat_affix}/utt2num_frames > ${testdir}${feat_affix}/pdfid.${subsampling}.tgt
+  fi
 fi
 
 # Den.fst and tgt creation
 if [ $stage -le 1 ]; then
   echo "Creating Chain Topology, Denominator Graph, and nnet Targets ..."
   lang=data/lang_chain
-  cp -r data/lang $lang
+  cp -r ${langdir} $lang
   silphonelist=$(cat $lang/phones/silence.csl) || exit 1;
   nonsilphonelist=$(cat $lang/phones/nonsilence.csl) || exit 1;
   # Use our special topology... note that later on may have to tune this
@@ -92,8 +94,15 @@ fi
 # Distribute memmapped features
 if [ $stage -le 2 ]; then
   echo "Dumping memory mapped features ..."
-  for d in ${traindir}${feat_affix} ${testdir}${feat_affix}; do
-    split_memmap_data.sh ${d} ${d}/pdfid.${subsampling}.tgt ${num_split} 
+  for d in ${traindir} ${testdir}; do
+    d=${d}${feat_affix}
+    num_spk=$(cat ${d}/spk2utt | wc -l)
+    num_split_d=${num_split}
+    if [ $num_spk -lt $num_split ]; then
+      echo "Reducing num_split to ${num_spk}=num_spk as num_spk < $num_split"
+      num_split_d=${num_spk}
+    fi
+    split_memmap_data.sh ${d} ${d}/pdfid.${subsampling}.tgt ${num_split_d} 
   done
 fi
 
@@ -122,6 +131,7 @@ if [ $stage -le 3 ]; then
     --optim adam \
     --l2-reg ${l2} \
     --xent-reg ${xent} \
+    --infonce-reg 0.0 \
     --batches-per-epoch ${batches_per_epoch} \
     --num-epochs 1 \
     --delay-updates ${delay_updates} \
@@ -150,11 +160,12 @@ if [ $stage -le 3 ]; then
     "${train_script}" `dirname ${chaindir}`/${model_dirname}
 fi
 
-# Average the last 50 epochs
+exit
+# Average the last 15 epochs
 if [ $stage -le 4 ]; then
   if $average; then
     feat_dim=$(feat-to-dim scp:${traindir}/feats.scp -)
-    start_avg=$((num_epochs - 50))
+    start_avg=$((num_epochs - 15))
     average_models.py `dirname ${chaindir}`/${model_dirname} ${feat_dim} ${start_avg} ${num_epochs}
   fi
 fi

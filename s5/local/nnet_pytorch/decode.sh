@@ -8,15 +8,16 @@ speech_data=/export/corpora5 #/PATH/TO/LIBRISPEECH/data
 stage=1
 subsampling=4
 chaindir=exp/chain
-langname=lang
 model_dirname=wrn
-checkpoint=253_303.mdl
+checkpoint=180_220.mdl
 acwt=1.0
-cw=140
-testsets="test"
+cw=-1
+testsets="tune"
 feat_affix="_fbank_64"
 decode_nj=80
 rescore=false
+graphname=graph
+lang=data/lang
 
 . ./utils/parse_options.sh
 
@@ -24,9 +25,9 @@ tree=${chaindir}/tree
 post_decode_acwt=`echo ${acwt} | awk '{print 10*$1}'`
 
 # Echo Make graph if it does not exist
-if [ ! -f ${tree}/graph/HCLG.fst ]; then 
+if [ ! -f ${tree}/${graphname}/HCLG.fst ]; then 
   ./utils/mkgraph.sh --self-loop-scale 1.0 \
-    data/${langname} ${tree} ${tree}/graph_${langname}
+    ${lang} ${tree} ${tree}/${graphname}
 fi
 
 cw_opts=""
@@ -34,7 +35,8 @@ if [ ! -z $cw ]; then
   cw_opts="--chunk-width ${cw}"
 fi
 
-for ds in $testsets; do 
+for ds in $testsets; do
+  [ -f data/${ds}/convs_dup ] && cp data/${ds}/convs_{,no}dup data/${ds}${feat_affix}/ 
   decode_nnet_pytorch.sh ${cw_opts} --min-lmwt 6 \
                          --max-lmwt 18 \
                          --cmd "$decode_cmd" \
@@ -43,7 +45,6 @@ for ds in $testsets; do
                          --post-decode-acwt ${post_decode_acwt} \
                          --nj ${decode_nj} \
                          data/${ds}${feat_affix} exp/${model_dirname} \
-                         ${tree}/graph_${langname} exp/${model_dirname}/decode_${checkpoint}_graph_${langname}_${acwt}_cw${cw}_${ds}
-  
+                         ${tree}/${graphname} exp/${model_dirname}/decode_${checkpoint}_${graphname}_${acwt}_cw${cw}_${ds}
 done
 

@@ -12,7 +12,6 @@ beam=6
 word_ins_penalty=0.0,0.5,1.0
 min_lmwt=7
 max_lmwt=17
-iter=final
 #end configuration section.
 
 echo "$0 $@"  # Print the command line for logging
@@ -40,64 +39,83 @@ for f in $symtab $dir/lat.1.gz $data/text; do
 done
 
 ref_filtering_cmd="cat"
-[ -x local/wer_output_filter ] && ref_filtering_cmd="local/wer_output_filter"
-[ -x local/wer_ref_filter ] && ref_filtering_cmd="local/wer_ref_filter"
 hyp_filtering_cmd="cat"
-[ -x local/wer_output_filter ] && hyp_filtering_cmd="local/wer_output_filter"
-[ -x local/wer_hyp_filter ] && hyp_filtering_cmd="local/wer_hyp_filter"
-
+[ -x local/wer_output_filter ] && ref_filtering_cmd="./local/wer_output_filter"
+[ -x local/wer_output_filter ] && hyp_filtering_cmd="./local/wer_output_filter"
 # Assume that the last _***** is the only part that specifies the utterance
 # and before that specifies the recording
 
-mkdir -p $dir/scoring
+scoringdir=$dir/scoring
+mkdir -p $scoringdir
 
-cat $data/text | local/combine_line_txt_to_paragraph.py | \
-  $ref_filtering_cmd > $dir/scoring/test_filt.txt
+if [ $stage -le 1 ]; then
+  cat $data/text | ./local/combine_line_txt_to_paragraph.py \
+    > $scoringdir/test.txt
+  cat $scoringdir/test.txt | $ref_filtering_cmd > $scoringdir/test.filt.txt
 
-for wip in $(echo $word_ins_penalty | sed 's/,/ /g'); do
-  $cmd LMWT=$min_lmwt:$max_lmwt $dir/scoring/penalty_$wip/log/best_path.LMWT.log \
-    lattice-scale --inv-acoustic-scale=LMWT "ark:gunzip -c $dir/lat.*.gz|" ark:- \| \
-    lattice-add-penalty --word-ins-penalty=$wip ark:- ark:- \| \
-    lattice-best-path --word-symbol-table=$symtab ark:- ark,t:- \| \
-    utils/int2sym.pl -f 2- $symtab \| \
-    local/combine_line_txt_to_paragraph.py \| \
-    $hyp_filtering_cmd '>' $dir/scoring/penalty_$wip/LMWT.txt || exit 1;
-done
-
-for wip in $(echo $word_ins_penalty | sed 's/,/ /g'); do
-  $cmd LMWT=$min_lmwt:$max_lmwt $dir/scoring/penalty_$wip/log/score.LMWT.log \
-    cat $dir/scoring/penalty_$wip/LMWT.txt \| \
-    compute-wer --text --mode=present \
-    ark:$dir/scoring/test_filt.txt  ark,p:- ">&" $dir/wer_LMWT_$wip || exit 1;
-  if [ -f ${data}/convs_dup ]; then
-    mkdir -p $dir/scoring_{,no}dup/penalty_$wip/log
+  for wip in $(echo $word_ins_penalty | sed 's/,/ /g'); do
+    mkdir -p ${scoringdir}/penalty_$wip
+    $cmd LMWT=$min_lmwt:$max_lmwt $scoringdir/penalty_$wip/log/best_path.LMWT.log \
+      lattice-scale --inv-acoustic-scale=LMWT "ark:gunzip -c $dir/lat.*.gz|" ark:- \| \
+      lattice-add-penalty --word-ins-penalty=$wip ark:- ark:- \| \
+      lattice-best-path --word-symbol-table=$symtab ark:- ark,t:- \| \
+      utils/int2sym.pl -f 2- $symtab '>' $scoringdir/penalty_$wip/LMWT.txt || exit 1;
+  
     for lmwt in $(seq $min_lmwt $max_lmwt); do
-      lmwt_file=$dir/scoring/penalty_$wip/${lmwt}.txt
-      awk '(NR==FNR){a[$1]=1; next} ($1 in a){print $0}' ${data}/convs_dup ${lmwt_file} \
-        > $dir/scoring_dup/penalty_$wip/${lmwt}.txt
-      awk '(NR==FNR){a[$1]=1; next} ($1 in a){print $0}' ${data}/convs_nodup ${lmwt_file} \
-        > $dir/scoring_nodup/penalty_$wip/${lmwt}.txt
-    done    
-    
-    $cmd LMWT=$min_lmwt:$max_lmwt $dir/scoring_dup/penalty_$wip/log/score.LMWT.log \
-      cat $dir/scoring_dup/penalty_$wip/LMWT.txt \| \
-      compute-wer --text --mode=present \
-      ark:$dir/scoring/test_filt.txt  ark,p:- ">&" $dir/wer_dup_LMWT_$wip || exit 1;
-    $cmd LMWT=$min_lmwt:$max_lmwt $dir/scoring_dup/penalty_$wip/log/score.LMWT.log \
-      cat $dir/scoring_nodup/penalty_$wip/LMWT.txt \| \
-      compute-wer --text --mode=present \
-      ark:$dir/scoring/test_filt.txt  ark,p:- ">&" $dir/wer_nodup_LMWT_$wip || exit 1;
-  fi
-done
-
-for wip in $(echo $word_ins_penalty | sed 's/,/ /g'); do
-  for lmwt in $(seq $min_lmwt $max_lmwt); do
-    # adding /dev/null to the command list below forces grep to output the filename
-    grep WER $dir/wer_${lmwt}_${wip} /dev/null
+      cat $scoringdir/penalty_$wip/${lmwt}.txt | \
+      ./local/combine_line_txt_to_paragraph.py \
+      > $scoringdir/penalty_$wip/${lmwt}.combine.txt
+  
+      cat $scoringdir/penalty_$wip/${lmwt}.combine.txt |\
+        ${hyp_filtering_cmd} > $scoringdir/penalty_$wip/${lmwt}.combine.filt.txt
+    done
   done
-done | utils/best_wer.sh  >& $dir/scoring/best_wer || exit 1
+fi
 
-best_wer_file=$(awk '{print $NF}' $dir/scoring/best_wer)
+if [ $stage -le 2 ]; then
+  for wip in $(echo $word_ins_penalty | sed 's/,/ /g'); do
+    for ext in .txt .filt.txt; do
+      if [[ $ext = ".txt" ]]; then
+        wer_affix="_"
+      else
+        wer_affix="_filt_"
+      fi
+      $cmd LMWT=$min_lmwt:$max_lmwt $scoringdir/penalty_$wip/log/score.LMWT${ext}.log \
+        cat $scoringdir/penalty_$wip/LMWT.combine${ext} \| \
+        compute-wer --mode=present \
+        ark:$scoringdir/test${ext}  ark,p:- ">&" $dir/wer${wer_affix}LMWT_$wip || exit 1;
+    
+      if [ -f ${data}/convs_dup ]; then
+        mkdir -p ${scoringdir}_{,no}dup/penalty_$wip/log
+        for lmwt in $(seq $min_lmwt $max_lmwt); do
+          lmwt_file=$scoringdir/penalty_$wip/${lmwt}.combine${ext}
+          awk '(NR==FNR){a[$1]=1; next} ($1 in a){print $0}' ${data}/convs_dup ${lmwt_file} \
+            > ${scoringdir}_dup/penalty_$wip/${lmwt}.combine${ext}
+          awk '(NR==FNR){a[$1]=1; next} ($1 in a){print $0}' ${data}/convs_nodup ${lmwt_file} \
+            > ${scoringdir}_nodup/penalty_$wip/${lmwt}.combine${ext}
+        done    
+     
+        $cmd LMWT=$min_lmwt:$max_lmwt ${scoringdir}_dup/penalty_$wip/log/score.LMWT${ext}.log \
+          cat ${scoringdir}_dup/penalty_$wip/LMWT.combine${ext} \| \
+          compute-wer --mode=present \
+          ark:${scoringdir}/test${ext}  ark,p:- ">&" $dir/wer_dup${wer_affix}LMWT_$wip || exit 1;
+        $cmd LMWT=$min_lmwt:$max_lmwt ${scoringdir}_dup/penalty_$wip/log/score.LMWT${ext}.log \
+          cat ${scoringdir}_nodup/penalty_$wip/LMWT.combine${ext} \| \
+          compute-wer --mode=present \
+          ark:${scoringdir}/test${ext}  ark,p:- ">&" $dir/wer_nodup${wer_affix}LMWT_$wip || exit 1;
+      fi
+    done
+  done
+  
+  for wip in $(echo $word_ins_penalty | sed 's/,/ /g'); do
+    for lmwt in $(seq $min_lmwt $max_lmwt); do
+      # adding /dev/null to the command list below forces grep to output the filename
+      grep WER $dir/wer_${lmwt}_${wip} /dev/null
+    done
+  done | utils/best_wer.sh  >& ${scoringdir}/best_wer || exit 1
+fi
+
+best_wer_file=$(awk '{print $NF}' ${scoringdir}/best_wer)
 best_wip=$(echo $best_wer_file | awk -F_ '{print $NF}')
 best_lmwt=$(echo $best_wer_file | awk -F_ '{N=NF-1; print $N}')
 
@@ -107,32 +125,32 @@ if [ -z "$best_lmwt" ]; then
 fi
 
 if $stats; then
-  mkdir -p $dir/scoring/wer_details
-  echo $best_lmwt > $dir/scoring/wer_details/lmwt # record best language model weight
-  echo $best_wip > $dir/scoring/wer_details/wip # record best word insertion penalty
+  mkdir -p ${scoringdir}/wer_details
+  echo $best_lmwt > ${scoringdir}/wer_details/lmwt # record best language model weight
+  echo $best_wip > ${scoringdir}/wer_details/wip # record best word insertion penalty
   
-  $cmd $dir/scoring/log/stats1.log \
-    cat $dir/scoring/penalty_$best_wip/$best_lmwt.txt \| \
-    align-text --special-symbol="'***'" ark:$dir/scoring/test_filt.txt ark:- ark,t:- \|  \
-    utils/scoring/wer_per_utt_details.pl --special-symbol "'***'" \| tee $dir/scoring/wer_details/per_utt \|\
-     utils/scoring/wer_per_spk_details.pl $data/utt2spk \> $dir/scoring/wer_details/per_spk || exit 1;
+  $cmd ${scoringdir}/log/stats1.log \
+    cat ${scoringdir}/penalty_$best_wip/$best_lmwt.combine.filt.txt \| \
+    align-text --special-symbol="'***'" ark:${scoringdir}/test.filt.txt ark:- ark,t:- \|  \
+    utils/scoring/wer_per_utt_details.pl --special-symbol "'***'" \| tee ${scoringdir}/wer_details/per_utt \|\
+     utils/scoring/wer_per_spk_details.pl $data/utt2spk \> ${scoringdir}/wer_details/per_spk || exit 1;
   
-  $cmd $dir/scoring/log/stats2.log \
-    cat $dir/scoring/wer_details/per_utt \| \
+  $cmd ${scoringdir}/log/stats2.log \
+    cat ${scoringdir}/wer_details/per_utt \| \
     utils/scoring/wer_ops_details.pl --special-symbol "'***'" \| \
-    sort -b -i -k 1,1 -k 4,4rn -k 2,2 -k 3,3 \> $dir/scoring/wer_details/ops || exit 1;
+    sort -b -i -k 1,1 -k 4,4rn -k 2,2 -k 3,3 \> ${scoringdir}/wer_details/ops || exit 1;
   
-  $cmd $dir/scoring/log/wer_bootci.log \
+  $cmd ${scoringdir}/log/wer_bootci.log \
     compute-wer-bootci --mode=present \
-      ark:$dir/scoring/test_filt.txt ark:$dir/scoring/penalty_$best_wip/$best_lmwt.txt \
-      '>' $dir/scoring/wer_details/wer_bootci || exit 1;
+      ark:${scoringdir}/test.filt.txt ark:${scoringdir}/penalty_$best_wip/$best_lmwt.combine.filt.txt \
+      '>' ${scoringdir}/wer_details/wer_bootci || exit 1;
   
-  oov_rate=$(python local/get_oov_rate.py ${dir}/scoring/test_filt.txt ${symtab})
+  oov_rate=$(python local/get_oov_rate.py ${scoringdir}/test.filt.txt ${symtab})
   echo "OOV Rate: ${oov_rate}"
-  echo ${oov_rate} > $dir/scoring/wer_details/oov_rate 
-  find $dir -name "wer_[0-9]*" | xargs -I {} grep WER {} | ./utils/best_wer.sh
-  grep WER $dir/wer_dup*| ./utils/best_wer.sh
-  grep WER $dir/wer_nodup* | ./utils/best_wer.sh
+  echo ${oov_rate} > ${scoringdir}/wer_details/oov_rate 
+  find $dir -name "wer_filt_[0-9]*" | xargs -I {} grep WER {} | ./utils/best_wer.sh
+  grep WER $dir/wer_dup_filt*| ./utils/best_wer.sh
+  grep WER $dir/wer_nodup_filt* | ./utils/best_wer.sh
 fi
 
 
