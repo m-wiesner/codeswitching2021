@@ -30,5 +30,5 @@ LC_ALL= python local/fix_lexicon.py --use-lang-tags \
 LC_ALL=C sort ${dict_dir}/lexicon.unsorted.txt > ${dict_dir}/lexicon.txt
 
 LC_ALL= python local/prepare_dict.py \
-  --silence-lexicon <(echo -e "!SIL SIL\n<unk> SPN"\n) \
+  --silence-lexicon <(echo -e "!SIL SIL\n<unk> SPN\n") \
   ${dict_dir}/lexicon.txt ${dict_dir}
