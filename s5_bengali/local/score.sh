@@ -49,9 +49,11 @@ scoringdir=$dir/scoring
 mkdir -p $scoringdir
 
 if [ $stage -le 1 ]; then
-  cat $data/text | ./local/combine_line_txt_to_paragraph.py \
-    > $scoringdir/test.txt
-  cat $scoringdir/test.txt | $ref_filtering_cmd > $scoringdir/test.filt.txt
+  if [ -f $data/text ]; then
+    cat $data/text | ./local/combine_line_txt_to_paragraph.py \
+      > $scoringdir/test.txt
+    cat $scoringdir/test.txt | $ref_filtering_cmd > $scoringdir/test.filt.txt
+  fi
 
   for wip in $(echo $word_ins_penalty | sed 's/,/ /g'); do
     mkdir -p ${scoringdir}/penalty_$wip
@@ -73,6 +75,11 @@ if [ $stage -le 1 ]; then
 fi
 
 if [ $stage -le 2 ]; then
+  if [ ! -f ${data}/text ]; then
+    echo "Not scoring since no reference found."
+    exit 0;
+  fi
+  
   for wip in $(echo $word_ins_penalty | sed 's/,/ /g'); do
     for ext in .txt .filt.txt; do
       if [[ $ext = ".txt" ]]; then
